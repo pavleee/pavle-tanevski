@@ -30,10 +30,6 @@ namespace FiktUniversity
 }
 
 
-
-
-
-
 using System.Web;
 using System.Web.Mvc;
 
@@ -47,11 +43,6 @@ namespace FiktUniversity
         }
     }
 }
-
-
-
-
-
 
 
 using System;
@@ -79,10 +70,6 @@ namespace FiktUniversity
 }
 
 
-
-
-
-
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -91,8 +78,8 @@ using System.Linq;
 using System.Net;
 using System.Web;
 using System.Web.Mvc;
-using ContosoUniversity.DAL;
-using ContosoUniversity.Models;
+using FiktUniversity.DAL;
+using FiktUniversity.Models;
 using System.Data.Entity.Infrastructure;
 
 namespace FiktUniversity.Controllers
@@ -260,8 +247,6 @@ namespace FiktUniversity.Controllers
 
 
 
-
-
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -271,8 +256,8 @@ using System.Threading.Tasks;
 using System.Net;
 using System.Web;
 using System.Web.Mvc;
-using ContosoUniversity.DAL;
-using ContosoUniversity.Models;
+using FiktUniversity.DAL;
+using FiktUniversity.Models;
 using System.Data.Entity.Infrastructure;
 
 namespace FiktUniversity.Controllers
@@ -479,15 +464,13 @@ namespace FiktUniversity.Controllers
 }
 
 
-
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using System.Web.Mvc;
-using ContosoUniversity.DAL;
-using ContosoUniversity.ViewModels;
+using FiktUniversity.DAL;
+using FiktUniversity.ViewModels;
 
 
 namespace FiktUniversity.Controllers
@@ -529,10 +512,6 @@ namespace FiktUniversity.Controllers
 }
 
 
-
-
-
-
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -541,9 +520,9 @@ using System.Linq;
 using System.Net;
 using System.Web;
 using System.Web.Mvc;
-using ContosoUniversity.DAL;
-using ContosoUniversity.Models;
-using ContosoUniversity.ViewModels;
+using FiktUniversity.DAL;
+using FiktUniversity.Models;
+using FiktUniversity.ViewModels;
 using System.Data.Entity.Infrastructure;
 
 namespace FiktUniversity.Controllers
@@ -731,12 +710,7 @@ namespace FiktUniversity.Controllers
                     if (instructorCourses.Contains(course.CourseID))
                     {
                         instructorToUpdate.Courses.Remove(course);
-                    }
-                }
-            }
-        }
-
-
+                    } } } }
 
         public ActionResult Delete(int? id)
         {
@@ -786,12 +760,6 @@ namespace FiktUniversity.Controllers
     }
 }
 
-
-
-
-
-
-
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -800,8 +768,8 @@ using System.Linq;
 using System.Net;
 using System.Web;
 using System.Web.Mvc;
-using ContosoUniversity.DAL;
-using ContosoUniversity.Models;
+using FiktUniversity.DAL;
+using FIktUniversity.Models;
 using PagedList;
 using System.Data.Entity.Infrastructure;
 
@@ -981,11 +949,6 @@ namespace FiktUniversity.Controllers
     }
 }
 
-
-
-
-
-
 using System;
 using System.Diagnostics;
 using System.Text;
@@ -1067,10 +1030,6 @@ namespace FiktUniversity.Logging
     }
 }
 
-
-
-
-
 namespace ContosoUniversity.Migrations
 {
     using System;
@@ -1132,9 +1091,6 @@ namespace ContosoUniversity.Migrations
 }
 
 
-
-
-
 namespace FiktUniversity.Migrations
 {
     using System;
@@ -1157,9 +1113,7 @@ namespace FiktUniversity.Migrations
 }
 
 
-
-
-namespace ContosoUniversity.Migrations
+namespace FiktUniversity.Migrations
 {
     using System;
     using System.Data.Entity.Migrations;
@@ -1254,10 +1208,6 @@ namespace ContosoUniversity.Migrations
 }
 
 
-
-
-
-
 namespace FiktUniversity.Migrations
 {
     using System;
@@ -1327,10 +1277,6 @@ namespace FiktUniversity.Migrations
         }
     }
 }
-
-
-
-
 
 
 namespace FiktUniversity.Migrations
@@ -1409,10 +1355,6 @@ namespace FiktUniversity.Migrations
     }
 }
 
-
-
-
-
 namespace FiktUniversity.Migrations
 {
     using System;
@@ -1468,14 +1410,10 @@ namespace FiktUniversity.Migrations
 }
 
 
-
-
-
-
-namespace ContosoUniversity.Migrations
+namespace FiktUniversity.Migrations
 {
-    using ContosoUniversity.Models;
-    using ContosoUniversity.DAL;
+    using FiktUniversity.Models;
+    using FiktUniversity.DAL;
     using System;
     using System.Collections.Generic;
     using System.Data.Entity;
@@ -1691,15 +1629,12 @@ namespace ContosoUniversity.Migrations
         }
     }
 }
-
-
-
 
 
 vnamespace FiktUniversity.Migrations
 {
-    using ContosoUniversity.Models;
-    using ContosoUniversity.DAL;
+    using FiktUniversity.Models;
+    using FiktUniversity.DAL;
     using System;
     using System.Collections.Generic;
     using System.Data.Entity;
@@ -1811,13 +1746,13 @@ vnamespace FiktUniversity.Migrations
             {
                 new OfficeAssignment { 
                     InstructorID = instructors.Single( i => i.LastName == "martin").ID, 
-                    Location = "Smith 17" },
+                    Location = "Veles 17" },
                 new OfficeAssignment { 
                     InstructorID = instructors.Single( i => i.LastName == "pavle").ID, 
-                    Location = "Gowan 27" },
+                    Location = "Skopje 27" },
                 new OfficeAssignment { 
                     InstructorID = instructors.Single( i => i.LastName == "dijana").ID, 
-                    Location = "Thompson 304" },
+                    Location = "Bitola 304" },
             };
             officeAssignments.ForEach(s => context.OfficeAssignments.AddOrUpdate(p => p.InstructorID, s));
             context.SaveChanges();
@@ -1915,9 +1850,6 @@ vnamespace FiktUniversity.Migrations
         }
     }
 }
-
-
-
 
 
 using System;
@@ -1954,8 +1886,6 @@ namespace FiktUniversity.Models
 }
 
 
-
-
 using System.ComponentModel.DataAnnotations;
 
 namespace FiktUniversity.Models
@@ -1977,9 +1907,6 @@ namespace FiktUniversity.Models
         public virtual Student Student { get; set; }
     }
 }
-
-
-
 
 
 using System;
@@ -2055,10 +1982,6 @@ namespace FiktUniversity.Models
 }
 
 
-
-
-
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -2078,9 +2001,6 @@ namespace FiktUniversity.Models
 }
 
 
-
-
-
 namespace FiktUniversity.ViewModels
 {
     public class AssignedCourseData
@@ -2090,10 +2010,6 @@ namespace FiktUniversity.ViewModels
         public bool Assigned { get; set; }
     }
 }
-
-
-
-
 
 
 using System;
@@ -2112,10 +2028,8 @@ namespace FiktUniversity.ViewModels
 
 
 
-
-
 using System.Collections.Generic;
-using ContosoUniversity.Models;
+using FiktUniversity.Models;
 
 namespace FiktUniversity.ViewModels
 {
@@ -2126,4 +2040,3 @@ namespace FiktUniversity.ViewModels
         public IEnumerable<Enrollment> Enrollments { get; set; }
     }
 }
-
