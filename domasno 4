@@ -1,0 +1,60 @@
+ <system.serviceModel>
+    <services>
+      <service behaviorConfiguration="FarmService.CustomerDeskOperationsBehavior" name="FarmService.CustomerDeskOperations">
+        <endpoint address="" binding="wsHttpBinding" bindingConfiguration="Request UserName" contract="FarmService.ICustomerDeskOperations">
+        </endpoint>
+        <endpoint address="mex" binding="mexHttpBinding" contract="IMetadataExchange"/>
+      </service>
+    </services>
+
+<bindings>
+  <wsHttpBinding>
+    <binding name="Request UserName" >
+      <security mode="Message">
+        <message clientCredentialType="UserName"/>
+      </security>
+    </binding>
+
+<behaviors>
+  <serviceBehaviors>
+    <behavior name="FarmService.CustomerDeskOperationsBehavior">
+      <serviceMetadata httpGetEnabled="true"/>
+      <serviceCredentials>
+        <userNameAuthentication userNamePasswordValidationMode="Custom" customUserNamePasswordValidatorType="FarmService.Authentication.DistributorValidator, FarmService"/>
+        <serviceCertificate findValue="Farm" storeLocation="LocalMachine" storeName="TrustedPeople" x509FindType="FindBySubjectName"/>
+      </serviceCredentials>
+    </behavior>
+
+
+public class DistributorValidator : UserNamePasswordValidator
+{
+    public override void Validate(string userName, string password)
+    {
+        if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(password))
+            throw new SecurityTokenException("Username and password required");
+        var repository = new DistributorRepository();
+        if (! repository.IsKnownDistributor(userName, password))
+            throw new FaultException(string.Format("Wrong username ({0}) or password ", userName));
+    }
+}
+
+<serviceCertificate findValue="Farm" storeLocation="LocalMachine" storeName="Trusted People"  x509FindType="FindBySubjectName"/>
+
+SelfCert
+
+SelfCert2
+
+The client
+
+var endPoint = new EndpointAddress(new Uri(Farm.FarmUrl), EndpointIdentity.CreateDnsIdentity("Farm"));
+var binding = new WSHttpBinding();
+binding.Security.Mode = SecurityMode.Message;
+binding.Security.Message.ClientCredentialType = MessageCredentialType.UserName;
+ 
+var result = new CustomerDeskOperationsClient(binding, endPoint);
+result.ClientCredentials.UserName.UserName = Farm.FarmUserName;
+result.ClientCredentials.UserName.Password = Farm.FarmPassword;
+
+<Update>
+
+</Update>
