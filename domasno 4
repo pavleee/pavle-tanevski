@@ -1,60 +1,2177 @@
- <system.serviceModel>
-    <services>
-      <service behaviorConfiguration="FarmService.CustomerDeskOperationsBehavior" name="FarmService.CustomerDeskOperations">
-        <endpoint address="" binding="wsHttpBinding" bindingConfiguration="Request UserName" contract="FarmService.ICustomerDeskOperations">
-        </endpoint>
-        <endpoint address="mex" binding="mexHttpBinding" contract="IMetadataExchange"/>
-      </service>
-    </services>
+using System.Web;
+using System.Web.Optimization;
 
-<bindings>
-  <wsHttpBinding>
-    <binding name="Request UserName" >
-      <security mode="Message">
-        <message clientCredentialType="UserName"/>
-      </security>
-    </binding>
-
-<behaviors>
-  <serviceBehaviors>
-    <behavior name="FarmService.CustomerDeskOperationsBehavior">
-      <serviceMetadata httpGetEnabled="true"/>
-      <serviceCredentials>
-        <userNameAuthentication userNamePasswordValidationMode="Custom" customUserNamePasswordValidatorType="FarmService.Authentication.DistributorValidator, FarmService"/>
-        <serviceCertificate findValue="Farm" storeLocation="LocalMachine" storeName="TrustedPeople" x509FindType="FindBySubjectName"/>
-      </serviceCredentials>
-    </behavior>
-
-
-public class DistributorValidator : UserNamePasswordValidator
+namespace FiktUniversity
 {
-    public override void Validate(string userName, string password)
+    public class BundleConfig
     {
-        if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(password))
-            throw new SecurityTokenException("Username and password required");
-        var repository = new DistributorRepository();
-        if (! repository.IsKnownDistributor(userName, password))
-            throw new FaultException(string.Format("Wrong username ({0}) or password ", userName));
+        public static void RegisterBundles(BundleCollection bundles)
+        {
+            bundles.Add(new ScriptBundle("~/bundles/jquery").Include(
+                        "~/Scripts/jquery-{version}.js"));
+
+            bundles.Add(new ScriptBundle("~/bundles/jqueryval").Include(
+                        "~/Scripts/jquery.validate*"));
+
+            bundles.Add(new ScriptBundle("~/bundles/modernizr").Include(
+                        "~/Scripts/modernizr-*"));
+
+            bundles.Add(new ScriptBundle("~/bundles/bootstrap").Include(
+                      "~/Scripts/bootstrap.js",
+                      "~/Scripts/respond.js"));
+
+            bundles.Add(new StyleBundle("~/Content/css").Include(
+                      "~/Content/bootstrap.css",
+                      "~/Content/site.css"));
+
+            BundleTable.EnableOptimizations = true;
+        }
     }
 }
 
-<serviceCertificate findValue="Farm" storeLocation="LocalMachine" storeName="Trusted People"  x509FindType="FindBySubjectName"/>
 
-SelfCert
+using System.Web;
+using System.Web.Mvc;
 
-SelfCert2
+namespace FiktUniversity
+{
+    public class FilterConfig
+    {
+        public static void RegisterGlobalFilters(GlobalFilterCollection filters)
+        {
+            filters.Add(new HandleErrorAttribute());
+        }
+    }
+}
 
-The client
 
-var endPoint = new EndpointAddress(new Uri(Farm.FarmUrl), EndpointIdentity.CreateDnsIdentity("Farm"));
-var binding = new WSHttpBinding();
-binding.Security.Mode = SecurityMode.Message;
-binding.Security.Message.ClientCredentialType = MessageCredentialType.UserName;
- 
-var result = new CustomerDeskOperationsClient(binding, endPoint);
-result.ClientCredentials.UserName.UserName = Farm.FarmUserName;
-result.ClientCredentials.UserName.Password = Farm.FarmPassword;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+using System.Web.Routing;
 
-<Update>
+namespace FiktUniversity
+{
+    public class RouteConfig
+    {
+        public static void RegisterRoutes(RouteCollection routes)
+        {
+            routes.IgnoreRoute("{resource}.axd/{*pathInfo}");
 
-</Update>
+            routes.MapRoute(
+                name: "Default",
+                url: "{controller}/{action}/{id}",
+                defaults: new { controller = "Home", action = "Index", id = UrlParameter.Optional }
+            );
+        }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Entity;
+using System.Linq;
+using System.Net;
+using System.Web;
+using System.Web.Mvc;
+using FiktUniversity.DAL;
+using FiktUniversity.Models;
+using System.Data.Entity.Infrastructure;
+
+namespace FiktUniversity.Controllers
+{
+    public class CourseController : Controller
+    {
+        private SchoolContext db = new SchoolContext();
+
+        public ActionResult Index(int? SelectedDepartment)
+        {
+            var departments = db.Departments.OrderBy(q => q.Name).ToList();
+            ViewBag.SelectedDepartment = new SelectList(departments, "DepartmentID", "Name", SelectedDepartment);
+            int departmentID = SelectedDepartment.GetValueOrDefault();
+
+            IQueryable<Course> courses = db.Courses
+                .Where(c => !SelectedDepartment.HasValue || c.DepartmentID == departmentID)
+                .OrderBy(d => d.CourseID)
+                .Include(d => d.Department);
+            var sql = courses.ToString();
+            return View(courses.ToList());
+        }
+
+        public ActionResult Details(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Course course = db.Courses.Find(id);
+            if (course == null)
+            {
+                return HttpNotFound();
+            }
+            return View(course);
+        }
+
+
+        public ActionResult Create()
+        {
+            PopulateDepartmentsDropDownList();
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Create([Bind(Include = "CourseID,Title,Credits,DepartmentID")]Course course)
+        {
+            try
+            {
+                if (ModelState.IsValid)
+                {
+                    db.Courses.Add(course);
+                    db.SaveChanges();
+                    return RedirectToAction("Index");
+                }
+            }
+            catch (RetryLimitExceededException /* dex */)
+            {
+                ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists, see your system administrator.");
+            }
+            PopulateDepartmentsDropDownList(course.DepartmentID);
+            return View(course);
+        }
+
+        public ActionResult Edit(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Course course = db.Courses.Find(id);
+            if (course == null)
+            {
+                return HttpNotFound();
+            }
+            PopulateDepartmentsDropDownList(course.DepartmentID);
+            return View(course);
+        }
+
+        [HttpPost, ActionName("Edit")]
+        [ValidateAntiForgeryToken]
+        public ActionResult EditPost(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            var courseToUpdate = db.Courses.Find(id);
+            if (TryUpdateModel(courseToUpdate, "",
+               new string[] { "Title", "Credits", "DepartmentID" }))
+            {
+                try
+                {
+                    db.SaveChanges();
+
+                    return RedirectToAction("Index");
+                }
+                catch (RetryLimitExceededException /* dex */)
+                {
+                    ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists, see your system administrator.");
+                }
+            }
+            PopulateDepartmentsDropDownList(courseToUpdate.DepartmentID);
+            return View(courseToUpdate);
+        }
+
+        private void PopulateDepartmentsDropDownList(object selectedDepartment = null)
+        {
+            var departmentsQuery = from d in db.Departments
+                                   orderby d.Name
+                                   select d;
+            ViewBag.DepartmentID = new SelectList(departmentsQuery, "DepartmentID", "Name", selectedDepartment);
+        }
+
+
+        public ActionResult Delete(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Course course = db.Courses.Find(id);
+            if (course == null)
+            {
+                return HttpNotFound();
+            }
+            return View(course);
+        }
+
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public ActionResult DeleteConfirmed(int id)
+        {
+            Course course = db.Courses.Find(id);
+            db.Courses.Remove(course);
+            db.SaveChanges();
+            return RedirectToAction("Index");
+        }
+
+        public ActionResult UpdateCourseCredits()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public ActionResult UpdateCourseCredits(int? multiplier)
+        {
+            if (multiplier != null)
+            {
+                ViewBag.RowsAffected = db.Database.ExecuteSqlCommand("UPDATE Course SET Credits = Credits * {0}", multiplier);
+            }
+            return View();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Entity;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Net;
+using System.Web;
+using System.Web.Mvc;
+using FiktUniversity.DAL;
+using FiktUniversity.Models;
+using System.Data.Entity.Infrastructure;
+
+namespace FiktUniversity.Controllers
+{
+    public class DepartmentController : Controller
+    {
+        private SchoolContext db = new SchoolContext();
+
+        public async Task<ActionResult> Index()
+        {
+            var departments = db.Departments.Include(d => d.Administrator);
+            return View(await departments.ToListAsync());
+        }
+
+        public async Task<ActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+
+           
+            string query = "SELECT * FROM Department WHERE DepartmentID = @p0";
+            Department department = await db.Departments.SqlQuery(query, id).SingleOrDefaultAsync();
+
+            if (department == null)
+            {
+                return HttpNotFound();
+            }
+            return View(department);
+        }
+
+        public ActionResult Create()
+        {
+            ViewBag.InstructorID = new SelectList(db.Instructors, "ID", "FullName");
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> Create([Bind(Include = "DepartmentID,Name,Budget,StartDate,InstructorID")] Department department)
+        {
+            if (ModelState.IsValid)
+            {
+                db.Departments.Add(department);
+                await db.SaveChangesAsync();
+                return RedirectToAction("Index");
+            }
+
+            ViewBag.InstructorID = new SelectList(db.Instructors, "ID", "FullName", department.InstructorID);
+            return View(department);
+        }
+
+        public async Task<ActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Department department = await db.Departments.FindAsync(id);
+            if (department == null)
+            {
+                return HttpNotFound();
+            }
+            ViewBag.InstructorID = new SelectList(db.Instructors, "ID", "FullName", department.InstructorID);
+            return View(department);
+        }
+
+        
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> Edit(int? id, byte[] rowVersion)
+        {
+            string[] fieldsToBind = new string[] { "Name", "Budget", "StartDate", "InstructorID", "RowVersion" };
+
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+
+            var departmentToUpdate = await db.Departments.FindAsync(id);
+            if (departmentToUpdate == null)
+            {
+                Department deletedDepartment = new Department();
+                TryUpdateModel(deletedDepartment, fieldsToBind);
+                ModelState.AddModelError(string.Empty,
+                    "Unable to save changes. The department was deleted by another user.");
+                ViewBag.InstructorID = new SelectList(db.Instructors, "ID", "FullName", deletedDepartment.InstructorID);
+                return View(deletedDepartment);
+            }
+
+            if (TryUpdateModel(departmentToUpdate, fieldsToBind))
+            {
+                try
+                {
+                    db.Entry(departmentToUpdate).OriginalValues["RowVersion"] = rowVersion;
+                    await db.SaveChangesAsync();
+
+                    return RedirectToAction("Index");
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    var entry = ex.Entries.Single();
+                    var clientValues = (Department)entry.Entity;
+                    var databaseEntry = entry.GetDatabaseValues();
+                    if (databaseEntry == null)
+                    {
+                        ModelState.AddModelError(string.Empty,
+                            "Unable to save changes. The department was deleted by another user.");
+                    }
+                    else
+                    {
+                        var databaseValues = (Department)databaseEntry.ToObject();
+
+                        if (databaseValues.Name != clientValues.Name)
+                            ModelState.AddModelError("Name", "Current value: "
+                                + databaseValues.Name);
+                        if (databaseValues.Budget != clientValues.Budget)
+                            ModelState.AddModelError("Budget", "Current value: "
+                                + String.Format("{0:c}", databaseValues.Budget));
+                        if (databaseValues.StartDate != clientValues.StartDate)
+                            ModelState.AddModelError("StartDate", "Current value: "
+                                + String.Format("{0:d}", databaseValues.StartDate));
+                        if (databaseValues.InstructorID != clientValues.InstructorID)
+                            ModelState.AddModelError("InstructorID", "Current value: "
+                                + db.Instructors.Find(databaseValues.InstructorID).FullName);
+                        ModelState.AddModelError(string.Empty, "The record you attempted to edit "
+                            + "was modified by another user after you got the original value. The "
+                            + "edit operation was canceled and the current values in the database "
+                            + "have been displayed. If you still want to edit this record, click "
+                            + "the Save button again. Otherwise click the Back to List hyperlink.");
+                        departmentToUpdate.RowVersion = databaseValues.RowVersion;
+                    }
+                }
+                catch (RetryLimitExceededException /* dex */)
+                {
+                    ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists, see your system administrator.");
+                }
+            }
+            ViewBag.InstructorID = new SelectList(db.Instructors, "ID", "FullName", departmentToUpdate.InstructorID);
+            return View(departmentToUpdate);
+        }
+
+        public async Task<ActionResult> Delete(int? id, bool? concurrencyError)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Department department = await db.Departments.FindAsync(id);
+            if (department == null)
+            {
+                if (concurrencyError.GetValueOrDefault())
+                {
+                    return RedirectToAction("Index");
+                }
+                return HttpNotFound();
+            }
+
+            if (concurrencyError.GetValueOrDefault())
+            {
+                ViewBag.ConcurrencyErrorMessage = "The record you attempted to delete "
+                    + "was modified by another user after you got the original values. "
+                    + "The delete operation was canceled and the current values in the "
+                    + "database have been displayed. If you still want to delete this "
+                    + "record, click the Delete button again. Otherwise "
+                    + "click the Back to List hyperlink.";
+            }
+
+            return View(department);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> Delete(Department department)
+        {
+            try
+            {
+                db.Entry(department).State = EntityState.Deleted;
+                await db.SaveChangesAsync();
+                return RedirectToAction("Index");
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return RedirectToAction("Delete", new { concurrencyError = true, id = department.DepartmentID });
+            }
+            catch (DataException /* dex */)
+            {
+                ModelState.AddModelError(string.Empty, "Unable to delete. Try again, and if the problem persists contact your system administrator.");
+                return View(department);
+            }
+        }
+
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+using FiktUniversity.DAL;
+using FiktUniversity.ViewModels;
+
+
+namespace FiktUniversity.Controllers
+{
+    public class HomeController : Controller
+    {
+        private SchoolContext db = new SchoolContext();
+
+        public ActionResult Index()
+        {
+            return View();
+        }
+
+        public ActionResult About()
+        {
+             };
+
+            string query = "SELECT EnrollmentDate, COUNT(*) AS StudentCount "
+                + "FROM Person "
+                + "WHERE Discriminator = 'Student' "
+                + "GROUP BY EnrollmentDate";
+            IEnumerable<EnrollmentDateGroup> data = db.Database.SqlQuery<EnrollmentDateGroup>(query);
+
+            return View(data.ToList());
+        }
+        public ActionResult Contact()
+        {
+            ViewBag.Message = "Your contact page.";
+
+            return View();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            db.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Entity;
+using System.Linq;
+using System.Net;
+using System.Web;
+using System.Web.Mvc;
+using FiktUniversity.DAL;
+using FiktUniversity.Models;
+using FiktUniversity.ViewModels;
+using System.Data.Entity.Infrastructure;
+
+namespace FiktUniversity.Controllers
+{
+    public class InstructorController : Controller
+    {
+        private SchoolContext db = new SchoolContext();
+
+        public ActionResult Index(int? id, int? courseID)
+        {
+            var viewModel = new InstructorIndexData();
+
+            viewModel.Instructors = db.Instructors
+                .Include(i => i.OfficeAssignment)
+                .Include(i => i.Courses.Select(c => c.Department))
+                .OrderBy(i => i.LastName);
+
+            if (id != null)
+            {
+                ViewBag.InstructorID = id.Value;
+                viewModel.Courses = viewModel.Instructors.Where(
+                    i => i.ID == id.Value).Single().Courses;
+            }
+
+            if (courseID != null)
+            {
+                ViewBag.CourseID = courseID.Value;
+               
+                var selectedCourse = viewModel.Courses.Where(x => x.CourseID == courseID).Single();
+                db.Entry(selectedCourse).Collection(x => x.Enrollments).Load();
+                foreach (Enrollment enrollment in selectedCourse.Enrollments)
+                {
+                    db.Entry(enrollment).Reference(x => x.Student).Load();
+                }
+
+                viewModel.Enrollments = selectedCourse.Enrollments;
+            }
+
+            return View(viewModel);
+        }
+
+
+        public ActionResult Details(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Instructor instructor = db.Instructors.Find(id);
+            if (instructor == null)
+            {
+                return HttpNotFound();
+            }
+            return View(instructor);
+        }
+
+        public ActionResult Create()
+        {
+            var instructor = new Instructor();
+            instructor.Courses = new List<Course>();
+            PopulateAssignedCourseData(instructor);
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Create([Bind(Include = "LastName,FirstMidName,HireDate,OfficeAssignment")]Instructor instructor, string[] selectedCourses)
+        {
+            if (selectedCourses != null)
+            {
+                instructor.Courses = new List<Course>();
+                foreach (var course in selectedCourses)
+                {
+                    var courseToAdd = db.Courses.Find(int.Parse(course));
+                    instructor.Courses.Add(courseToAdd);
+                }
+            }
+            if (ModelState.IsValid)
+            {
+                db.Instructors.Add(instructor);
+                db.SaveChanges();
+                return RedirectToAction("Index");
+            }
+            PopulateAssignedCourseData(instructor);
+            return View(instructor);
+        }
+
+
+        public ActionResult Edit(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Instructor instructor = db.Instructors
+                .Include(i => i.OfficeAssignment)
+                .Include(i => i.Courses)
+                .Where(i => i.ID == id)
+                .Single();
+            PopulateAssignedCourseData(instructor);
+            if (instructor == null)
+            {
+                return HttpNotFound();
+            }
+            return View(instructor);
+        }
+
+        private void PopulateAssignedCourseData(Instructor instructor)
+        {
+            var allCourses = db.Courses;
+            var instructorCourses = new HashSet<int>(instructor.Courses.Select(c => c.CourseID));
+            var viewModel = new List<AssignedCourseData>();
+            foreach (var course in allCourses)
+            {
+                viewModel.Add(new AssignedCourseData
+                {
+                    CourseID = course.CourseID,
+                    Title = course.Title,
+                    Assigned = instructorCourses.Contains(course.CourseID)
+                });
+            }
+            ViewBag.Courses = viewModel;
+        }
+       
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Edit(int? id, string[] selectedCourses)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            var instructorToUpdate = db.Instructors
+               .Include(i => i.OfficeAssignment)
+               .Include(i => i.Courses)
+               .Where(i => i.ID == id)
+               .Single();
+
+            if (TryUpdateModel(instructorToUpdate, "",
+               new string[] { "LastName", "FirstMidName", "HireDate", "OfficeAssignment" }))
+            {
+                try
+                {
+                    if (String.IsNullOrWhiteSpace(instructorToUpdate.OfficeAssignment.Location))
+                    {
+                        instructorToUpdate.OfficeAssignment = null;
+                    }
+
+                    UpdateInstructorCourses(selectedCourses, instructorToUpdate);
+
+                    db.SaveChanges();
+
+                    return RedirectToAction("Index");
+                }
+                catch (RetryLimitExceededException /* dex */)
+                {
+                    ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists, see your system administrator.");
+                }
+            }
+            PopulateAssignedCourseData(instructorToUpdate);
+            return View(instructorToUpdate);
+        }
+        private void UpdateInstructorCourses(string[] selectedCourses, Instructor instructorToUpdate)
+        {
+            if (selectedCourses == null)
+            {
+                instructorToUpdate.Courses = new List<Course>();
+                return;
+            }
+
+            var selectedCoursesHS = new HashSet<string>(selectedCourses);
+            var instructorCourses = new HashSet<int>
+                (instructorToUpdate.Courses.Select(c => c.CourseID));
+            foreach (var course in db.Courses)
+            {
+                if (selectedCoursesHS.Contains(course.CourseID.ToString()))
+                {
+                    if (!instructorCourses.Contains(course.CourseID))
+                    {
+                        instructorToUpdate.Courses.Add(course);
+                    }
+                }
+                else
+                {
+                    if (instructorCourses.Contains(course.CourseID))
+                    {
+                        instructorToUpdate.Courses.Remove(course);
+                    } } } }
+
+        public ActionResult Delete(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Instructor instructor = db.Instructors.Find(id);
+            if (instructor == null)
+            {
+                return HttpNotFound();
+            }
+            return View(instructor);
+        }
+
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public ActionResult DeleteConfirmed(int id)
+        {
+            Instructor instructor = db.Instructors
+              .Include(i => i.OfficeAssignment)
+              .Where(i => i.ID == id)
+              .Single();
+
+            instructor.OfficeAssignment = null;
+            db.Instructors.Remove(instructor);
+
+            var department = db.Departments
+                .Where(d => d.InstructorID == id)
+                .SingleOrDefault();
+            if (department != null)
+            {
+                department.InstructorID = null;
+            }
+
+            db.SaveChanges();
+            return RedirectToAction("Index");
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Entity;
+using System.Linq;
+using System.Net;
+using System.Web;
+using System.Web.Mvc;
+using FiktUniversity.DAL;
+using FIktUniversity.Models;
+using PagedList;
+using System.Data.Entity.Infrastructure;
+
+namespace FiktUniversity.Controllers
+{
+    public class StudentController : Controller
+    {
+        private SchoolContext db = new SchoolContext();
+
+        public ViewResult Index(string sortOrder, string currentFilter, string searchString, int? page)
+        {
+            ViewBag.CurrentSort = sortOrder;
+            ViewBag.NameSortParm = String.IsNullOrEmpty(sortOrder) ? "name_desc" : "";
+            ViewBag.DateSortParm = sortOrder == "Date" ? "date_desc" : "Date";
+
+            if (searchString != null)
+            {
+                page = 1;
+            }
+            else
+            {
+                searchString = currentFilter;
+            }
+
+            ViewBag.CurrentFilter = searchString;
+
+            var students = from s in db.Students
+                           select s;
+            if (!String.IsNullOrEmpty(searchString))
+            {
+                students = students.Where(s => s.LastName.Contains(searchString)
+                                       || s.FirstMidName.Contains(searchString));
+            }
+            switch (sortOrder)
+            {
+                case "name_desc":
+                    students = students.OrderByDescending(s => s.LastName);
+                    break;
+                case "Date":
+                    students = students.OrderBy(s => s.EnrollmentDate);
+                    break;
+                case "date_desc":
+                    students = students.OrderByDescending(s => s.EnrollmentDate);
+                    break;
+                default:  // Name ascending 
+                    students = students.OrderBy(s => s.LastName);
+                    break;
+            }
+
+            int pageSize = 3;
+            int pageNumber = (page ?? 1);
+            return View(students.ToPagedList(pageNumber, pageSize));
+        }
+
+        public ActionResult Details(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Student student = db.Students.Find(id);
+            if (student == null)
+            {
+                return HttpNotFound();
+            }
+            return View(student);
+        }
+
+        public ActionResult Create()
+        {
+            return View();
+        }
+
+      
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Create([Bind(Include = "LastName, FirstMidName, EnrollmentDate")]Student student)
+        {
+            try
+            {
+                if (ModelState.IsValid)
+                {
+                    db.Students.Add(student);
+                    db.SaveChanges();
+                    return RedirectToAction("Index");
+                }
+            }
+            catch (RetryLimitExceededException /* dex */)
+            {
+                ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists see your system administrator.");
+            }
+            return View(student);
+        }
+
+        public ActionResult Edit(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Student student = db.Students.Find(id);
+            if (student == null)
+            {
+                return HttpNotFound();
+            }
+            return View(student);
+        }
+
+        [HttpPost, ActionName("Edit")]
+        [ValidateAntiForgeryToken]
+        public ActionResult EditPost(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            var studentToUpdate = db.Students.Find(id);
+            if (TryUpdateModel(studentToUpdate, "",
+               new string[] { "LastName", "FirstMidName", "EnrollmentDate" }))
+            {
+                try
+                {
+                    db.SaveChanges();
+
+                    return RedirectToAction("Index");
+                }
+                catch (RetryLimitExceededException /* dex */)
+                {
+                    ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists, see your system administrator.");
+                }
+            }
+            return View(studentToUpdate);
+        }
+
+        public ActionResult Delete(int? id, bool? saveChangesError = false)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            if (saveChangesError.GetValueOrDefault())
+            {
+                ViewBag.ErrorMessage = "Delete failed. Try again, and if the problem persists see your system administrator.";
+            }
+            Student student = db.Students.Find(id);
+            if (student == null)
+            {
+                return HttpNotFound();
+            }
+            return View(student);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Delete(int id)
+        {
+            try
+            {
+                Student student = db.Students.Find(id);
+                db.Students.Remove(student);
+                db.SaveChanges();
+            }
+            catch (RetryLimitExceededException/* dex */)
+            {
+                return RedirectToAction("Delete", new { id = id, saveChangesError = true });
+            }
+            return RedirectToAction("Index");
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
+
+using System;
+using System.Diagnostics;
+using System.Text;
+
+namespace FiktUniversity.Logging
+{
+    public class Logger : ILogger
+    {
+
+        public void Information(string message)
+        {
+            Trace.TraceInformation(message);
+        }
+
+        public void Information(string fmt, params object[] vars)
+        {
+            Trace.TraceInformation(fmt, vars);
+        }
+
+        public void Information(Exception exception, string fmt, params object[] vars)
+        {
+            Trace.TraceInformation(FormatExceptionMessage(exception, fmt, vars));
+        }
+
+        public void Warning(string message)
+        {
+            Trace.TraceWarning(message);
+        }
+
+        public void Warning(string fmt, params object[] vars)
+        {
+            Trace.TraceWarning(fmt, vars);
+        }
+
+        public void Warning(Exception exception, string fmt, params object[] vars)
+        {
+            Trace.TraceWarning(FormatExceptionMessage(exception, fmt, vars));
+        }
+
+        public void Error(string message)
+        {
+            Trace.TraceError(message);
+        }
+
+        public void Error(string fmt, params object[] vars)
+        {
+            Trace.TraceError(fmt, vars);
+        }
+
+        public void Error(Exception exception, string fmt, params object[] vars)
+        {
+            Trace.TraceError(FormatExceptionMessage(exception, fmt, vars));
+        }
+
+        public void TraceApi(string componentName, string method, TimeSpan timespan)
+        {
+            TraceApi(componentName, method, timespan, "");
+        }
+
+        public void TraceApi(string componentName, string method, TimeSpan timespan, string fmt, params object[] vars)
+        {
+            TraceApi(componentName, method, timespan, string.Format(fmt, vars));
+        }
+        public void TraceApi(string componentName, string method, TimeSpan timespan, string properties)
+        {
+            string message = String.Concat("Component:", componentName, ";Method:", method, ";Timespan:", timespan.ToString(), ";Properties:", properties);
+            Trace.TraceInformation(message);
+        }
+
+        private static string FormatExceptionMessage(Exception exception, string fmt, object[] vars)
+        {
+            
+            var sb = new StringBuilder();
+            sb.Append(string.Format(fmt, vars));
+            sb.Append(" Exception: ");
+            sb.Append(exception.ToString());
+            return sb.ToString();
+        }
+    }
+}
+
+namespace ContosoUniversity.Migrations
+{
+    using System;
+    using System.Data.Entity.Migrations;
+    
+    public partial class InitialCreate : DbMigration
+    {
+        public override void Up()
+        {
+            CreateTable(
+                "dbo.Course",
+                c => new
+                    {
+                        CourseID = c.Int(nullable: false),
+                        Title = c.String(),
+                        Credits = c.Int(nullable: false),
+                    })
+                .PrimaryKey(t => t.CourseID);
+            
+            CreateTable(
+                "dbo.Enrollment",
+                c => new
+                    {
+                        EnrollmentID = c.Int(nullable: false, identity: true),
+                        CourseID = c.Int(nullable: false),
+                        StudentID = c.Int(nullable: false),
+                        Grade = c.Int(),
+                    })
+                .PrimaryKey(t => t.EnrollmentID)
+                .ForeignKey("dbo.Course", t => t.CourseID, cascadeDelete: true)
+                .ForeignKey("dbo.Student", t => t.StudentID, cascadeDelete: true)
+                .Index(t => t.CourseID)
+                .Index(t => t.StudentID);
+            
+            CreateTable(
+                "dbo.Student",
+                c => new
+                    {
+                        ID = c.Int(nullable: false, identity: true),
+                        LastName = c.String(),
+                        FirstMidName = c.String(),
+                        EnrollmentDate = c.DateTime(nullable: false),
+                    })
+                .PrimaryKey(t => t.ID);
+            
+        }
+        
+        public override void Down()
+        {
+            DropForeignKey("dbo.Enrollment", "StudentID", "dbo.Student");
+            DropForeignKey("dbo.Enrollment", "CourseID", "dbo.Course");
+            DropIndex("dbo.Enrollment", new[] { "StudentID" });
+            DropIndex("dbo.Enrollment", new[] { "CourseID" });
+            DropTable("dbo.Student");
+            DropTable("dbo.Enrollment");
+            DropTable("dbo.Course");
+        }
+    }
+}
+
+
+namespace FiktUniversity.Migrations
+{
+    using System;
+    using System.Data.Entity.Migrations;
+    
+    public partial class MaxLengthOnNames : DbMigration
+    {
+        public override void Up()
+        {
+            AlterColumn("dbo.Student", "LastName", c => c.String(maxLength: 50));
+            AlterColumn("dbo.Student", "FirstMidName", c => c.String(maxLength: 50));
+        }
+        
+        public override void Down()
+        {
+            AlterColumn("dbo.Student", "FirstMidName", c => c.String());
+            AlterColumn("dbo.Student", "LastName", c => c.String());
+        }
+    }
+}
+
+
+namespace FiktUniversity.Migrations
+{
+    using System;
+    using System.Data.Entity.Migrations;
+    
+    public partial class ComplexDataModel : DbMigration
+    {
+        public override void Up()
+        {
+            RenameColumn(table: "dbo.Student", name: "FirstMidName", newName: "FirstName");
+            CreateTable(
+                "dbo.Department",
+                c => new
+                    {
+                        DepartmentID = c.Int(nullable: false, identity: true),
+                        Name = c.String(maxLength: 50),
+                        Budget = c.Decimal(nullable: false, storeType: "money"),
+                        StartDate = c.DateTime(nullable: false),
+                        InstructorID = c.Int(),
+                    })
+                .PrimaryKey(t => t.DepartmentID)
+                .ForeignKey("dbo.Instructor", t => t.InstructorID)
+                .Index(t => t.InstructorID);
+            
+            CreateTable(
+                "dbo.Instructor",
+                c => new
+                    {
+                        ID = c.Int(nullable: false, identity: true),
+                        LastName = c.String(nullable: false, maxLength: 50),
+                        FirstName = c.String(nullable: false, maxLength: 50),
+                        HireDate = c.DateTime(nullable: false),
+                    })
+                .PrimaryKey(t => t.ID);
+            
+            CreateTable(
+                "dbo.OfficeAssignment",
+                c => new
+                    {
+                        InstructorID = c.Int(nullable: false),
+                        Location = c.String(maxLength: 50),
+                    })
+                .PrimaryKey(t => t.InstructorID)
+                .ForeignKey("dbo.Instructor", t => t.InstructorID)
+                .Index(t => t.InstructorID);
+            
+            CreateTable(
+                "dbo.CourseInstructor",
+                c => new
+                    {
+                        CourseID = c.Int(nullable: false),
+                        InstructorID = c.Int(nullable: false),
+                    })
+                .PrimaryKey(t => new { t.CourseID, t.InstructorID })
+                .ForeignKey("dbo.Course", t => t.CourseID, cascadeDelete: true)
+                .ForeignKey("dbo.Instructor", t => t.InstructorID, cascadeDelete: true)
+                .Index(t => t.CourseID)
+                .Index(t => t.InstructorID);
+
+            Sql("INSERT INTO dbo.Department (Name, Budget, StartDate) VALUES ('Temp', 0.00, GETDATE())");
+            AddColumn("dbo.Course", "DepartmentID", c => c.Int(nullable: false, defaultValue: 1));
+
+            AlterColumn("dbo.Course", "Title", c => c.String(maxLength: 50));
+            AlterColumn("dbo.Student", "LastName", c => c.String(nullable: false, maxLength: 50));
+            AlterColumn("dbo.Student", "FirstName", c => c.String(nullable: false, maxLength: 50));
+            CreateIndex("dbo.Course", "DepartmentID");
+            AddForeignKey("dbo.Course", "DepartmentID", "dbo.Department", "DepartmentID", cascadeDelete: true);
+        }
+        
+        public override void Down()
+        {
+            DropForeignKey("dbo.CourseInstructor", "InstructorID", "dbo.Instructor");
+            DropForeignKey("dbo.CourseInstructor", "CourseID", "dbo.Course");
+            DropForeignKey("dbo.Course", "DepartmentID", "dbo.Department");
+            DropForeignKey("dbo.Department", "InstructorID", "dbo.Instructor");
+            DropForeignKey("dbo.OfficeAssignment", "InstructorID", "dbo.Instructor");
+            DropIndex("dbo.CourseInstructor", new[] { "InstructorID" });
+            DropIndex("dbo.CourseInstructor", new[] { "CourseID" });
+            DropIndex("dbo.OfficeAssignment", new[] { "InstructorID" });
+            DropIndex("dbo.Department", new[] { "InstructorID" });
+            DropIndex("dbo.Course", new[] { "DepartmentID" });
+            AlterColumn("dbo.Student", "FirstName", c => c.String(maxLength: 50));
+            AlterColumn("dbo.Student", "LastName", c => c.String(maxLength: 50));
+            AlterColumn("dbo.Course", "Title", c => c.String());
+            DropColumn("dbo.Course", "DepartmentID");
+            DropTable("dbo.CourseInstructor");
+            DropTable("dbo.OfficeAssignment");
+            DropTable("dbo.Instructor");
+            DropTable("dbo.Department");
+            RenameColumn(table: "dbo.Student", name: "FirstName", newName: "FirstMidName");
+        }
+    }
+}
+
+
+namespace FiktUniversity.Migrations
+{
+    using System;
+    using System.Data.Entity.Migrations;
+    
+    public partial class DepartmentSP : DbMigration
+    {
+        public override void Up()
+        {
+            CreateStoredProcedure(
+                "dbo.Department_Insert",
+                p => new
+                    {
+                        Name = p.String(maxLength: 50),
+                        Budget = p.Decimal(precision: 19, scale: 4, storeType: "money"),
+                        StartDate = p.DateTime(),
+                        InstructorID = p.Int(),
+                    },
+                body:
+                    @"INSERT [dbo].[Department]([Name], [Budget], [StartDate], [InstructorID])
+                      VALUES (@Name, @Budget, @StartDate, @InstructorID)
+                      
+                      DECLARE @DepartmentID int
+                      SELECT @DepartmentID = [DepartmentID]
+                      FROM [dbo].[Department]
+                      WHERE @@ROWCOUNT > 0 AND [DepartmentID] = scope_identity()
+                      
+                      SELECT t0.[DepartmentID]
+                      FROM [dbo].[Department] AS t0
+                      WHERE @@ROWCOUNT > 0 AND t0.[DepartmentID] = @DepartmentID"
+            );
+            
+            CreateStoredProcedure(
+                "dbo.Department_Update",
+                p => new
+                    {
+                        DepartmentID = p.Int(),
+                        Name = p.String(maxLength: 50),
+                        Budget = p.Decimal(precision: 19, scale: 4, storeType: "money"),
+                        StartDate = p.DateTime(),
+                        InstructorID = p.Int(),
+                    },
+                body:
+                    @"UPDATE [dbo].[Department]
+                      SET [Name] = @Name, [Budget] = @Budget, [StartDate] = @StartDate, [InstructorID] = @InstructorID
+                      WHERE ([DepartmentID] = @DepartmentID)"
+            );
+            
+            CreateStoredProcedure(
+                "dbo.Department_Delete",
+                p => new
+                    {
+                        DepartmentID = p.Int(),
+                    },
+                body:
+                    @"DELETE [dbo].[Department]
+                      WHERE ([DepartmentID] = @DepartmentID)"
+            );
+            
+        }
+        
+        public override void Down()
+        {
+            DropStoredProcedure("dbo.Department_Delete");
+            DropStoredProcedure("dbo.Department_Update");
+            DropStoredProcedure("dbo.Department_Insert");
+        }
+    }
+}
+
+
+namespace FiktUniversity.Migrations
+{
+    using System;
+    using System.Data.Entity.Migrations;
+    
+    public partial class RowVersion : DbMigration
+    {
+        public override void Up()
+        {
+            AddColumn("dbo.Department", "RowVersion", c => c.Binary(nullable: false, fixedLength: true, timestamp: true, storeType: "rowversion"));
+            AlterStoredProcedure(
+                "dbo.Department_Insert",
+                p => new
+                    {
+                        Name = p.String(maxLength: 50),
+                        Budget = p.Decimal(precision: 19, scale: 4, storeType: "money"),
+                        StartDate = p.DateTime(),
+                        InstructorID = p.Int(),
+                    },
+                body:
+                    @"INSERT [dbo].[Department]([Name], [Budget], [StartDate], [InstructorID])
+                      VALUES (@Name, @Budget, @StartDate, @InstructorID)
+                      
+                      DECLARE @DepartmentID int
+                      SELECT @DepartmentID = [DepartmentID]
+                      FROM [dbo].[Department]
+                      WHERE @@ROWCOUNT > 0 AND [DepartmentID] = scope_identity()
+                      
+                      SELECT t0.[DepartmentID], t0.[RowVersion]
+                      FROM [dbo].[Department] AS t0
+                      WHERE @@ROWCOUNT > 0 AND t0.[DepartmentID] = @DepartmentID"
+            );
+            
+            AlterStoredProcedure(
+                "dbo.Department_Update",
+                p => new
+                    {
+                        DepartmentID = p.Int(),
+                        Name = p.String(maxLength: 50),
+                        Budget = p.Decimal(precision: 19, scale: 4, storeType: "money"),
+                        StartDate = p.DateTime(),
+                        InstructorID = p.Int(),
+                        RowVersion_Original = p.Binary(maxLength: 8, fixedLength: true, storeType: "rowversion"),
+                    },
+                body:
+                    @"UPDATE [dbo].[Department]
+                      SET [Name] = @Name, [Budget] = @Budget, [StartDate] = @StartDate, [InstructorID] = @InstructorID
+                      WHERE (([DepartmentID] = @DepartmentID) AND (([RowVersion] = @RowVersion_Original) OR ([RowVersion] IS NULL AND @RowVersion_Original IS NULL)))
+                      
+                      SELECT t0.[RowVersion]
+                      FROM [dbo].[Department] AS t0
+                      WHERE @@ROWCOUNT > 0 AND t0.[DepartmentID] = @DepartmentID"
+            );
+            
+            AlterStoredProcedure(
+                "dbo.Department_Delete",
+                p => new
+                    {
+                        DepartmentID = p.Int(),
+                        RowVersion_Original = p.Binary(maxLength: 8, fixedLength: true, storeType: "rowversion"),
+                    },
+                body:
+                    @"DELETE [dbo].[Department]
+                      WHERE (([DepartmentID] = @DepartmentID) AND (([RowVersion] = @RowVersion_Original) OR ([RowVersion] IS NULL AND @RowVersion_Original IS NULL)))"
+            );
+            
+        }
+        
+        public override void Down()
+        {
+            DropColumn("dbo.Department", "RowVersion");
+            throw new NotSupportedException("Scaffolding create or alter procedure operations is not supported in down methods.");
+        }
+    }
+}
+
+namespace FiktUniversity.Migrations
+{
+    using System;
+    using System.Data.Entity.Migrations;
+    using System.Diagnostics;
+    
+    public partial class Inheritance : DbMigration
+    {
+        public override void Up()
+        {
+            Debug.Print("Start");
+            DropForeignKey("dbo.Enrollment", "StudentID", "dbo.Student");
+            DropIndex("dbo.Enrollment", new[] { "StudentID" });
+
+            RenameTable(name: "dbo.Instructor", newName: "Person");
+            AddColumn("dbo.Person", "EnrollmentDate", c => c.DateTime());
+            AddColumn("dbo.Person", "Discriminator", c => c.String(nullable: false, maxLength: 128, defaultValue: "Instructor"));
+            AlterColumn("dbo.Person", "HireDate", c => c.DateTime());
+            AddColumn("dbo.Person", "OldId", c => c.Int(nullable: true));
+
+            Sql("INSERT INTO dbo.Person (LastName, FirstName, HireDate, EnrollmentDate, Discriminator, OldId) SELECT LastName, FirstName, null AS HireDate, EnrollmentDate, 'Student' AS Discriminator, ID AS OldId FROM dbo.Student");
+
+            Sql("UPDATE dbo.Enrollment SET StudentId = (SELECT ID FROM dbo.Person WHERE OldId = Enrollment.StudentId AND Discriminator = 'Student')");
+
+            DropColumn("dbo.Person", "OldId");
+
+            DropTable("dbo.Student");
+
+            AddForeignKey("dbo.Enrollment", "StudentID", "dbo.Person", "ID", cascadeDelete: true);
+            CreateIndex("dbo.Enrollment", "StudentID");
+            Debug.Print("end");
+        }
+        
+        public override void Down()
+        {
+            CreateTable(
+                "dbo.Student",
+                c => new
+                    {
+                        ID = c.Int(nullable: false, identity: true),
+                        LastName = c.String(nullable: false, maxLength: 50),
+                        FirstName = c.String(nullable: false, maxLength: 50),
+                        EnrollmentDate = c.DateTime(nullable: false),
+                    })
+                .PrimaryKey(t => t.ID);
+            
+            AlterColumn("dbo.Person", "HireDate", c => c.DateTime(nullable: false));
+            DropColumn("dbo.Person", "Discriminator");
+            DropColumn("dbo.Person", "EnrollmentDate");
+            RenameTable(name: "dbo.Person", newName: "Instructor");
+        }
+    }
+}
+
+
+namespace FiktUniversity.Migrations
+{
+    using FiktUniversity.Models;
+    using FiktUniversity.DAL;
+    using System;
+    using System.Collections.Generic;
+    using System.Data.Entity;
+    using System.Data.Entity.Migrations;
+    using System.Linq;
+
+    internal sealed class Configuration : DbMigrationsConfiguration<SchoolContext>
+    {
+        public Configuration()
+        {
+            AutomaticMigrationsEnabled = false;
+        }
+
+        protected override void Seed(SchoolContext context)
+        {
+            var students = new List<Student>
+            {
+                new Student { FirstMidName = "pavle",   LastName = "tanevski", 
+                    EnrollmentDate = DateTime.Parse("2010-09-01") },
+                new Student { FirstMidName = "martin", LastName = "ristov",    
+                    EnrollmentDate = DateTime.Parse("2012-09-01") },
+                new Student { FirstMidName = "Andrej",   LastName = "mihajlov",     
+                    EnrollmentDate = DateTime.Parse("2013-09-01") },
+                new Student { FirstMidName = "ivan",    LastName = "mihajlov", 
+                    EnrollmentDate = DateTime.Parse("2012-09-01") },
+                new Student { FirstMidName = "stefanio",      LastName = "benik",        
+                    EnrollmentDate = DateTime.Parse("2012-09-01") },
+                new Student { FirstMidName = "ivan",    LastName = "jelic",   
+                    EnrollmentDate = DateTime.Parse("2011-09-01") },
+                new Student { FirstMidName = "dijana",    LastName = "samandova",    
+                    EnrollmentDate = DateTime.Parse("2013-09-01") },
+                new Student { FirstMidName = "olivera",     LastName = "atanasova",  
+                    EnrollmentDate = DateTime.Parse("2005-09-01") }
+            };
+
+
+            students.ForEach(s => context.Students.AddOrUpdate(p => p.LastName, s));
+            context.SaveChanges();
+
+            var instructors = new List<Instructor>
+            {
+                new Instructor { FirstMidName = "Marina",     LastName = "ivanova", 
+                    HireDate = DateTime.Parse("1995-03-11") },
+                new Instructor { FirstMidName = "grant",    LastName = "gustin",    
+                    HireDate = DateTime.Parse("2002-07-06") },
+                new Instructor { FirstMidName = "Roger",   LastName = "Harui",       
+                    HireDate = DateTime.Parse("1998-07-01") },
+                new Instructor { FirstMidName = "iris", LastName = "west",      
+                    HireDate = DateTime.Parse("2001-01-15") },
+                new Instructor { FirstMidName = "ana",   LastName = "anovska",      
+                    HireDate = DateTime.Parse("2004-02-12") }
+            };
+            instructors.ForEach(s => context.Instructors.AddOrUpdate(p => p.LastName, s));
+            context.SaveChanges();
+
+            var departments = new List<Department>
+            {
+                new Department { Name = "English",     Budget = 350000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "pavle").ID },
+                new Department { Name = "Mathematics", Budget = 100000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "dijana").ID },
+                new Department { Name = "Engineering", Budget = 350000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "marina").ID },
+                new Department { Name = "Economics",   Budget = 100000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "martin").ID }
+            };
+            departments.ForEach(s => context.Departments.AddOrUpdate(p => p.Name, s));
+            context.SaveChanges();
+
+            var courses = new List<Course>
+            {
+                new Course {CourseID = 1050, Title = "Chemistry",      Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "Engineering").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 4022, Title = "Microeconomics", Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "Economics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 4041, Title = "Macroeconomics", Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "Economics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 1045, Title = "Calculus",       Credits = 4,
+                  DepartmentID = departments.Single( s => s.Name == "Mathematics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 3141, Title = "Trigonometry",   Credits = 4,
+                  DepartmentID = departments.Single( s => s.Name == "Mathematics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 2021, Title = "Composition",    Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "English").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 2042, Title = "Literature",     Credits = 4,
+                  DepartmentID = departments.Single( s => s.Name == "English").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+            };
+            courses.ForEach(s => context.Courses.AddOrUpdate(p => p.CourseID, s));
+            context.SaveChanges();
+
+            var officeAssignments = new List<OfficeAssignment>
+            {
+                new OfficeAssignment { 
+                    InstructorID = instructors.Single( i => i.LastName == "martin").ID, 
+                    Location = "Smith 17" },
+                new OfficeAssignment { 
+                    InstructorID = instructors.Single( i => i.LastName == "pavle").ID, 
+                    Location = "Gowan 27" },
+                new OfficeAssignment { 
+                    InstructorID = instructors.Single( i => i.LastName == "dijana").ID, 
+                    Location = "Thompson 304" },
+            };
+            officeAssignments.ForEach(s => context.OfficeAssignments.AddOrUpdate(p => p.InstructorID, s));
+            context.SaveChanges();
+
+            AddOrUpdateInstructor(context, "Chemistry", "Martin");
+            AddOrUpdateInstructor(context, "Chemistry", "Ivan");
+            AddOrUpdateInstructor(context, "Microeconomics", "pavle");
+            AddOrUpdateInstructor(context, "Macroeconomics", "pavle");
+
+            AddOrUpdateInstructor(context, "Calculus", "dijana");
+            AddOrUpdateInstructor(context, "Trigonometry", "dijana");
+            AddOrUpdateInstructor(context, "Composition", "andrijana");
+            AddOrUpdateInstructor(context, "Literature", "andrijana");
+
+            context.SaveChanges();
+
+            var enrollments = new List<Enrollment>
+            {
+                new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Alexandar").ID, 
+                    CourseID = courses.Single(c => c.Title == "Chemistry" ).CourseID, 
+                    Grade = Grade.A 
+                },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Alexandar").ID,
+                    CourseID = courses.Single(c => c.Title == "Microeconomics" ).CourseID, 
+                    Grade = Grade.C 
+                 },                            
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Alexander").ID,
+                    CourseID = courses.Single(c => c.Title == "Macroeconomics" ).CourseID, 
+                    Grade = Grade.B
+                 },
+                 new Enrollment { 
+                     StudentID = students.Single(s => s.LastName == "Ace").ID,
+                    CourseID = courses.Single(c => c.Title == "Calculus" ).CourseID, 
+                    Grade = Grade.B 
+                 },
+                 new Enrollment { 
+                     StudentID = students.Single(s => s.LastName == "Ace").ID,
+                    CourseID = courses.Single(c => c.Title == "Trigonometry" ).CourseID, 
+                    Grade = Grade.B 
+                 },
+                 new Enrollment {
+                    StudentID = students.Single(s => s.LastName == "Ace").ID,
+                    CourseID = courses.Single(c => c.Title == "Composition" ).CourseID, 
+                    Grade = Grade.B 
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Filip").ID,
+                    CourseID = courses.Single(c => c.Title == "Chemistry" ).CourseID
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Filip").ID,
+                    CourseID = courses.Single(c => c.Title == "Microeconomics").CourseID,
+                    Grade = Grade.B         
+                 },
+                new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Filip").ID,
+                    CourseID = courses.Single(c => c.Title == "Chemistry").CourseID,
+                    Grade = Grade.B         
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Goce").ID,
+                    CourseID = courses.Single(c => c.Title == "Composition").CourseID,
+                    Grade = Grade.B         
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Goce").ID,
+                    CourseID = courses.Single(c => c.Title == "Literature").CourseID,
+                    Grade = Grade.B         
+                 }
+            };
+
+            foreach (Enrollment e in enrollments)
+            {
+                var enrollmentInDataBase = context.Enrollments.Where(
+                    s =>
+                         s.Student.ID == e.StudentID &&
+                         s.Course.CourseID == e.CourseID).SingleOrDefault();
+                if (enrollmentInDataBase == null)
+                {
+                    context.Enrollments.Add(e);
+                }
+            }
+            context.SaveChanges();
+        }
+
+        void AddOrUpdateInstructor(SchoolContext context, string courseTitle, string instructorName)
+        {
+            var crs = context.Courses.SingleOrDefault(c => c.Title == courseTitle);
+            var inst = crs.Instructors.SingleOrDefault(i => i.LastName == instructorName);
+            if (inst == null)
+                crs.Instructors.Add(context.Instructors.Single(i => i.LastName == instructorName));
+        }
+    }
+}
+
+
+vnamespace FiktUniversity.Migrations
+{
+    using FiktUniversity.Models;
+    using FiktUniversity.DAL;
+    using System;
+    using System.Collections.Generic;
+    using System.Data.Entity;
+    using System.Data.Entity.Migrations;
+    using System.Linq;
+
+    internal sealed class Configuration : DbMigrationsConfiguration<SchoolContext>
+    {
+        public Configuration()
+        {
+            AutomaticMigrationsEnabled = false;
+        }
+
+        protected override void Seed(SchoolContext context)
+        {
+            var students = new List<Student>
+            {
+                new Student { FirstMidName = "pavle",   LastName = "tanevski", 
+                    EnrollmentDate = DateTime.Parse("2010-09-01") },
+                new Student { FirstMidName = "martin", LastName = "ristov",    
+                    EnrollmentDate = DateTime.Parse("2012-09-01") },
+                new Student { FirstMidName = "Andrej",   LastName = "mihajlov",     
+                    EnrollmentDate = DateTime.Parse("2013-09-01") },
+                new Student { FirstMidName = "ivan",    LastName = "mihajlov", 
+                    EnrollmentDate = DateTime.Parse("2012-09-01") },
+                new Student { FirstMidName = "stefanio",      LastName = "benik",        
+                    EnrollmentDate = DateTime.Parse("2012-09-01") },
+                new Student { FirstMidName = "ivan",    LastName = "jelic",   
+                    EnrollmentDate = DateTime.Parse("2011-09-01") },
+                new Student { FirstMidName = "dijana",    LastName = "samandova",    
+                    EnrollmentDate = DateTime.Parse("2013-09-01") },
+                new Student { FirstMidName = "olivera",     LastName = "atanasova",  
+                    EnrollmentDate = DateTime.Parse("2005-09-01") }
+            };
+
+
+            students.ForEach(s => context.Students.AddOrUpdate(p => p.LastName, s));
+            context.SaveChanges();
+
+            var instructors = new List<Instructor>
+            {
+                new Instructor { FirstMidName = "Marina",     LastName = "ivanova", 
+                    HireDate = DateTime.Parse("1995-03-11") },
+                new Instructor { FirstMidName = "grant",    LastName = "gustin",    
+                    HireDate = DateTime.Parse("2002-07-06") },
+                new Instructor { FirstMidName = "Roger",   LastName = "Harui",       
+                    HireDate = DateTime.Parse("1998-07-01") },
+                new Instructor { FirstMidName = "iris", LastName = "west",      
+                    HireDate = DateTime.Parse("2001-01-15") },
+                new Instructor { FirstMidName = "ana",   LastName = "anovska",      
+                    HireDate = DateTime.Parse("2004-02-12") }
+            };
+            instructors.ForEach(s => context.Instructors.AddOrUpdate(p => p.LastName, s));
+            context.SaveChanges();
+
+            var departments = new List<Department>
+            {
+                new Department { Name = "English",     Budget = 350000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "pavle").ID },
+                new Department { Name = "Mathematics", Budget = 100000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "dijana").ID },
+                new Department { Name = "Engineering", Budget = 350000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "marina").ID },
+                new Department { Name = "Economics",   Budget = 100000, 
+                    StartDate = DateTime.Parse("2007-09-01"), 
+                    InstructorID  = instructors.Single( i => i.LastName == "martin").ID }
+            };
+            departments.ForEach(s => context.Departments.AddOrUpdate(p => p.Name, s));
+            context.SaveChanges();
+
+            var courses = new List<Course>
+            {
+                new Course {CourseID = 1050, Title = "Chemistry",      Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "Engineering").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 4022, Title = "Microeconomics", Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "Economics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 4041, Title = "Macroeconomics", Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "Economics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 1045, Title = "Calculus",       Credits = 4,
+                  DepartmentID = departments.Single( s => s.Name == "Mathematics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 3141, Title = "Trigonometry",   Credits = 4,
+                  DepartmentID = departments.Single( s => s.Name == "Mathematics").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 2021, Title = "Composition",    Credits = 3,
+                  DepartmentID = departments.Single( s => s.Name == "English").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+                new Course {CourseID = 2042, Title = "Literature",     Credits = 4,
+                  DepartmentID = departments.Single( s => s.Name == "English").DepartmentID,
+                  Instructors = new List<Instructor>() 
+                },
+            };
+            courses.ForEach(s => context.Courses.AddOrUpdate(p => p.CourseID, s));
+            context.SaveChanges();
+
+            var officeAssignments = new List<OfficeAssignment>
+            {
+                new OfficeAssignment { 
+                    InstructorID = instructors.Single( i => i.LastName == "martin").ID, 
+                    Location = "Veles 17" },
+                new OfficeAssignment { 
+                    InstructorID = instructors.Single( i => i.LastName == "pavle").ID, 
+                    Location = "Skopje 27" },
+                new OfficeAssignment { 
+                    InstructorID = instructors.Single( i => i.LastName == "dijana").ID, 
+                    Location = "Bitola 304" },
+            };
+            officeAssignments.ForEach(s => context.OfficeAssignments.AddOrUpdate(p => p.InstructorID, s));
+            context.SaveChanges();
+
+            AddOrUpdateInstructor(context, "Chemistry", "Martin");
+            AddOrUpdateInstructor(context, "Chemistry", "Ivan");
+            AddOrUpdateInstructor(context, "Microeconomics", "pavle");
+            AddOrUpdateInstructor(context, "Macroeconomics", "pavle");
+
+            AddOrUpdateInstructor(context, "Calculus", "dijana");
+            AddOrUpdateInstructor(context, "Trigonometry", "dijana");
+            AddOrUpdateInstructor(context, "Composition", "andrijana");
+            AddOrUpdateInstructor(context, "Literature", "andrijana");
+
+            context.SaveChanges();
+
+            var enrollments = new List<Enrollment>
+            {
+                new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Alexandar").ID, 
+                    CourseID = courses.Single(c => c.Title == "Chemistry" ).CourseID, 
+                    Grade = Grade.A 
+                },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Alexandar").ID,
+                    CourseID = courses.Single(c => c.Title == "Microeconomics" ).CourseID, 
+                    Grade = Grade.C 
+                 },                            
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Alexander").ID,
+                    CourseID = courses.Single(c => c.Title == "Macroeconomics" ).CourseID, 
+                    Grade = Grade.B
+                 },
+                 new Enrollment { 
+                     StudentID = students.Single(s => s.LastName == "Ace").ID,
+                    CourseID = courses.Single(c => c.Title == "Calculus" ).CourseID, 
+                    Grade = Grade.B 
+                 },
+                 new Enrollment { 
+                     StudentID = students.Single(s => s.LastName == "Ace").ID,
+                    CourseID = courses.Single(c => c.Title == "Trigonometry" ).CourseID, 
+                    Grade = Grade.B 
+                 },
+                 new Enrollment {
+                    StudentID = students.Single(s => s.LastName == "Ace").ID,
+                    CourseID = courses.Single(c => c.Title == "Composition" ).CourseID, 
+                    Grade = Grade.B 
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Filip").ID,
+                    CourseID = courses.Single(c => c.Title == "Chemistry" ).CourseID
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Filip").ID,
+                    CourseID = courses.Single(c => c.Title == "Microeconomics").CourseID,
+                    Grade = Grade.B         
+                 },
+                new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Filip").ID,
+                    CourseID = courses.Single(c => c.Title == "Chemistry").CourseID,
+                    Grade = Grade.B         
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Goce").ID,
+                    CourseID = courses.Single(c => c.Title == "Composition").CourseID,
+                    Grade = Grade.B         
+                 },
+                 new Enrollment { 
+                    StudentID = students.Single(s => s.LastName == "Goce").ID,
+                    CourseID = courses.Single(c => c.Title == "Literature").CourseID,
+                    Grade = Grade.B         
+                 }
+            };
+
+            foreach (Enrollment e in enrollments)
+            {
+                var enrollmentInDataBase = context.Enrollments.Where(
+                    s =>
+                         s.Student.ID == e.StudentID &&
+                         s.Course.CourseID == e.CourseID).SingleOrDefault();
+                if (enrollmentInDataBase == null)
+                {
+                    context.Enrollments.Add(e);
+                }
+            }
+            context.SaveChanges();
+        }
+
+        void AddOrUpdateInstructor(SchoolContext context, string courseTitle, string instructorName)
+        {
+            var crs = context.Courses.SingleOrDefault(c => c.Title == courseTitle);
+            var inst = crs.Instructors.SingleOrDefault(i => i.LastName == instructorName);
+            if (inst == null)
+                crs.Instructors.Add(context.Instructors.Single(i => i.LastName == instructorName));
+        }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace FiktUniversity.Models
+{
+    public class Department
+    {
+        public int DepartmentID { get; set; }
+
+        [StringLength(50, MinimumLength = 3)]
+        public string Name { get; set; }
+
+        [DataType(DataType.Currency)]
+        [Column(TypeName = "money")]
+        public decimal Budget { get; set; }
+
+        [DataType(DataType.Date)]
+        [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}", ApplyFormatInEditMode = true)]
+        [Display(Name = "Start Date")]
+        public DateTime StartDate { get; set; }
+
+        public int? InstructorID { get; set; }
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; }
+
+        public virtual Instructor Administrator { get; set; }
+        public virtual ICollection<Course> Courses { get; set; }
+    }
+}
+
+
+using System.ComponentModel.DataAnnotations;
+
+namespace FiktUniversity.Models
+{
+    public enum Grade
+    {
+        A, B, C, D, F
+    }
+
+    public class Enrollment
+    {
+        public int EnrollmentID { get; set; }
+        public int CourseID { get; set; }
+        public int StudentID { get; set; }
+        [DisplayFormat(NullDisplayText = "No grade")]
+        public Grade? Grade { get; set; }
+
+        public virtual Course Course { get; set; }
+        public virtual Student Student { get; set; }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace FiktUniversity.Models
+{
+    public class Instructor : Person
+    {
+        [DataType(DataType.Date)]
+        [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}", ApplyFormatInEditMode = true)]
+        [Display(Name = "Hire Date")]
+        public DateTime HireDate { get; set; }
+
+        public virtual ICollection<Course> Courses { get; set; }
+        public virtual OfficeAssignment OfficeAssignment { get; set; }
+    }
+}
+
+
+
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace FiktUniversity.Models
+{
+    public class OfficeAssignment
+    {
+        [Key]
+        [ForeignKey("Instructor")]
+        public int InstructorID { get; set; }
+        [StringLength(50)]
+        [Display(Name = "Office Location")]
+        public string Location { get; set; }
+
+        public virtual Instructor Instructor { get; set; }
+    }
+}
+
+
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace FiktUniversity.Models
+{
+    public abstract class Person
+    {
+        public int ID { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        [Display(Name = "Last Name")]
+        public string LastName { get; set; }
+        [Required]
+        [StringLength(50, ErrorMessage = "First name cannot be longer than 50 characters.")]
+        [Column("FirstName")]
+        [Display(Name = "First Name")]
+        public string FirstMidName { get; set; }
+
+        [Display(Name = "Full Name")]
+        public string FullName
+        {
+            get
+            {
+                return LastName + ", " + FirstMidName;
+            }
+        }
+    }
+}
+
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace FiktUniversity.Models
+{
+    public class Student : Person
+    {
+        [DataType(DataType.Date)]
+        [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}", ApplyFormatInEditMode = true)]
+        [Display(Name = "Enrollment Date")]
+        public DateTime EnrollmentDate { get; set; }
+
+        public virtual ICollection<Enrollment> Enrollments { get; set; }
+    }
+}
+
+
+namespace FiktUniversity.ViewModels
+{
+    public class AssignedCourseData
+    {
+        public int CourseID { get; set; }
+        public string Title { get; set; }
+        public bool Assigned { get; set; }
+    }
+}
+
+
+using System;
+using System.ComponentModel.DataAnnotations;
+
+namespace FiktUniversity.ViewModels
+{
+    public class EnrollmentDateGroup
+    {
+        [DataType(DataType.Date)]
+        public DateTime? EnrollmentDate { get; set; }
+
+        public int StudentCount { get; set; }
+    }
+}
+
+
+
+using System.Collections.Generic;
+using FiktUniversity.Models;
+
+namespace FiktUniversity.ViewModels
+{
+    public class InstructorIndexData
+    {
+        public IEnumerable<Instructor> Instructors { get; set; }
+        public IEnumerable<Course> Courses { get; set; }
+        public IEnumerable<Enrollment> Enrollments { get; set; }
+    }
+}
+}
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.ServiceModel;
+using System.ServiceModel.Web;
+using System.Text;
+
+namespace FiktUniversity
+{
+public class WCFContactService : IFiktUniversity
+    {
+        string ConString = "Server=YOGESHMEHLA-PC;Database=WCFContactDB;Trusted_Connection=True;";
+        public int Insert(WCFContact ContactPar)
+        {
+            using (SqlConnection con = new SqlConnection(ConString))
+            {
+                using (SqlCommand cmd = new SqlCommand("dbo.InsertContact", con))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.Add("@ContactName", SqlDbType.VarChar, 100).Value = ContactPar.ContactName;
+                    cmd.Parameters.Add("@ContactAddress", SqlDbType.VarChar, 100).Value = ContactPar.ContactAddress;
+                    cmd.Parameters.Add("@ContactNumber", SqlDbType.VarChar, 100).Value = ContactPar.ContactNumber;
+                    con.Open();
+                    var ID = cmd.ExecuteScalar();
+                    ContactPar.ContactID = Convert.ToInt32(ID.ToString());
+                }
+            }
+            return ContactPar.ContactID;
+        }
+        public int Update(WCFContact ContactPar)
+        {
+            using (SqlConnection con = new SqlConnection(ConString))
+            {
+                using (SqlCommand cmd = new SqlCommand("dbo.UpdateContact", con))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.Add("@ContactID", SqlDbType.Int).Value = ContactPar.ContactID;
+                    cmd.Parameters.Add("@ContactName", SqlDbType.VarChar, 100).Value = ContactPar.ContactName;
+                    cmd.Parameters.Add("@ContactAddress", SqlDbType.VarChar, 100).Value = ContactPar.ContactAddress;
+                    cmd.Parameters.Add("@ContactNumber", SqlDbType.VarChar, 100).Value = ContactPar.ContactNumber;
+                    con.Open();
+                    var ID = cmd.ExecuteNonQuery();
+                    return ID;
+                }
+            }
+        }
+        public List<WCFContact> SelectAll()
+        {
+            List<WCFContact> SelectList = new List<WCFContact>();
+            using (SqlConnection con = new SqlConnection(ConString))
+            {
+                using (SqlCommand cmd = new SqlCommand("dbo.SelectAllContact", con))
+                {
+                    using (SqlDataAdapter da = new SqlDataAdapter(cmd))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        DataSet ds = new DataSet();
+                        da.Fill(ds);
+                        if (ds.Tables.Count > 0)
+                        {
+                            foreach (DataRow dr in ds.Tables[0].Rows)
+                            {
+                                SelectList.Add(new WCFContact
+                                {
+                                    ContactAddress = dr["ContactAddress"].ToString(),
+                                    ContactDOB = Convert.ToDateTime(dr["ContactDOB"]),
+                                    ContactID = Convert.ToInt32(dr["ContactID"]),
+                                    ContactIncome = Convert.ToDecimal(dr["ContactIncome"]),
+                                    ContactName = Convert.ToString(dr["ContactName"]),
+                                    ContactNumber = Convert.ToString(dr["ContactNumber"])
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            return SelectList;
+        }
+        public int Delete(WCFContact ContactPar)
+        {
+            using (SqlConnection con = new SqlConnection(ConString))
+            {
+                using (SqlCommand cmd = new SqlCommand("dbo.DeleteContact", con))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.Add("@ContactID", SqlDbType.Int).Value = ContactPar.ContactID;
+                    con.Open();
+                    var ID = cmd.ExecuteNonQuery();
+                    return ID;
+                }
+            }
+        }
+    }
+}
+<?xml version="1.0"?>
+<configuration>
+
+  <appSettings>
+    <add key="aspnet:UseTaskFriendlySynchronizationContext" value="true" />
+  </appSettings>
+  <system.web>
+    <compilation debug="true" targetFramework="4.5" />
+    <httpRuntime targetFramework="4.5"/>
+  </system.web>
+  <system.serviceModel>
+    <behaviors>
+      <serviceBehaviors>
+        <behavior>
+          <!-- To avoid disclosing metadata information, set the values below to false before deployment -->
+          <serviceMetadata httpGetEnabled="true" httpsGetEnabled="true"/>
+          <!-- To receive exception details in faults for debugging purposes, set the value below to true.  Set to false before deployment to avoid disclosing exception information -->
+          <serviceDebug includeExceptionDetailInFaults="false"/>
+        </behavior>
+      </serviceBehaviors>
+    </behaviors>
+    <protocolMapping>
+        <add binding="basicHttpsBinding" scheme="https" />
+    </protocolMapping>    
+    <serviceHostingEnvironment aspNetCompatibilityEnabled="true" multipleSiteBindingsEnabled="true" />
+  </system.serviceModel>
+  <system.webServer>
+    <modules runAllManagedModulesForAllRequests="true"/>
+  
+    <directoryBrowse enabled="true"/>
+  </system.webServer>
+
+</configuration>
+
+
+
